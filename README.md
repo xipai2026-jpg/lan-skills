@@ -30,15 +30,20 @@ plugins/jueling/skills/jueling/
 
 ## 在 hermes agent 上安装 · Install on hermes
 
-hermes 的 `skills tap` 期望仓库根目录下是 `skills/<名>/SKILL.md`，
-与 Claude Code 的 marketplace 布局不同，因此目前请手工安装整个目录
-（`SKILL.md` 依赖 `references/`，只装单个文件会残废）：
+本仓库根目录同时提供 hermes 布局（`skills/jueling/`），所以可以直接加为 tap：
+
+```bash
+hermes skills tap add xipai2026-jpg/lan-skills
+hermes skills install jueling --category lan --yes
+hermes skills list | grep jueling      # 应显示 jueling | lan | enabled
+```
+
+也可以手工装（`SKILL.md` 依赖 `references/`，务必整目录复制）：
 
 ```bash
 git clone --depth 1 https://github.com/xipai2026-jpg/lan-skills.git /tmp/lan-skills
 mkdir -p ~/.hermes/skills/lan
-cp -r /tmp/lan-skills/plugins/jueling/skills/jueling ~/.hermes/skills/lan/
-hermes skills list | grep jueling      # 应显示 jueling | lan | local | enabled
+cp -r /tmp/lan-skills/skills/jueling ~/.hermes/skills/lan/
 ```
 
 > ⚠️ hermes 把技能索引里的 description **截断到 60 字符**（含省略号），
@@ -61,6 +66,16 @@ hermes skills list | grep jueling      # 应显示 jueling | lan | local | enabl
 ```
 /plugin marketplace update lan-skills
 ```
+
+## 目录布局 · Layout
+
+```
+plugins/jueling/skills/jueling/   ← 唯一事实源（Claude Code marketplace 布局）
+skills/jueling/                   ← 生成物（hermes tap 布局），由 ./sync.sh 产出
+```
+
+**改内容只改 `plugins/`，然后跑 `./sync.sh`**，两份一起提交。
+`./sync.sh --check` 检查是否漂移（不一致时退出码 1，可挂进 CI）。
 
 ## 版权 · License
 
