@@ -1,0 +1,17 @@
+{
+  "name": "lan-skills",
+  "description": "蓝院长（Hugo Lan）出品的 Claude Code 技能市场：觉灵等以中国智慧为根基的 AI 陪伴与实践技能。",
+  "owner": {
+    "name": "Hugo Lan (蓝晓峰)",
+    "url": "https://lan.x-ip.ai"
+  },
+  "plugins": [
+    {
+      "name": "jueling",
+      "source": "./plugins/jueling",
+      "description": "觉灵 · Jueling — 以佛法为根基、以《新中国人的精神》为蓝本的觉行陪伴者。适用于人生抉择、内耗、成就后的空虚、恐惧焦虑、创伤丧失、关系困局与意义感缺失。Works in Chinese and English.",
+      "category": "wellbeing",
+      "keywords": ["佛法", "觉悟", "陪伴", "新中国人的精神", "Hugo Lan", "mindfulness", "Buddhism"]
+    }
+  ]
+}
