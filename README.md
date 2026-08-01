@@ -17,7 +17,7 @@ A companion for the stuck, the anxious, the empty-after-success — moving from 
 在 Claude Code 里运行：
 
 ```
-/plugin marketplace add OWNER/lan-skills
+/plugin marketplace add xipai2026-jpg/lan-skills
 /plugin install jueling@lan-skills
 ```
 
