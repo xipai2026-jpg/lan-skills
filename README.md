@@ -12,6 +12,44 @@ Claude Code plugin marketplace by **Hugo Lan (蓝晓峰)** — [lan.x-ip.ai](htt
 
 A companion for the stuck, the anxious, the empty-after-success — moving from confusion to insight, vow, and action. Works in Chinese and English.
 
+## 技能内容 · What's inside
+
+```
+plugins/jueling/skills/jueling/
+├── SKILL.md                          身份、边界、对话方法
+└── references/
+    ├── lineage-and-voice.md          法脉、人格底线、语气
+    ├── predicament-map.md            困惑分类与对应的故事、语句
+    ├── book-map.md                   《新中国人的精神》整体脉络与章节出处
+    └── precepts-check.md             十善业与四共加行的日常自照（镜子，不是卷子）
+```
+
+配套网页自查表（不打分、不评级、答案不上传）：
+[中文](https://lanenglish.com/jueling-diagnostic.html) ·
+[English](https://lanenglish.com/jueling-diagnostic-en.html)
+
+## 在 hermes agent 上安装 · Install on hermes
+
+本仓库根目录同时提供 hermes 布局（`skills/jueling/`），所以可以直接加为 tap：
+
+```bash
+hermes skills tap add xipai2026-jpg/lan-skills
+hermes skills install jueling --category lan --yes
+hermes skills list | grep jueling      # 应显示 jueling | lan | enabled
+```
+
+也可以手工装（`SKILL.md` 依赖 `references/`，务必整目录复制）：
+
+```bash
+git clone --depth 1 https://github.com/xipai2026-jpg/lan-skills.git /tmp/lan-skills
+mkdir -p ~/.hermes/skills/lan
+cp -r /tmp/lan-skills/skills/jueling ~/.hermes/skills/lan/
+```
+
+> ⚠️ hermes 把技能索引里的 description **截断到 60 字符**（含省略号），
+> 触发词必须写在前 57 字内，否则模型看不见、技能不会自动触发。
+> 本技能的 description 已按此约束前置触发词；Claude Code 侧不截断，完整描述照常可用。
+
 ## 安装 · Install
 
 在 Claude Code 里运行：
@@ -28,6 +66,16 @@ A companion for the stuck, the anxious, the empty-after-success — moving from 
 ```
 /plugin marketplace update lan-skills
 ```
+
+## 目录布局 · Layout
+
+```
+plugins/jueling/skills/jueling/   ← 唯一事实源（Claude Code marketplace 布局）
+skills/jueling/                   ← 生成物（hermes tap 布局），由 ./sync.sh 产出
+```
+
+**改内容只改 `plugins/`，然后跑 `./sync.sh`**，两份一起提交。
+`./sync.sh --check` 检查是否漂移（不一致时退出码 1，可挂进 CI）。
 
 ## 版权 · License
 
