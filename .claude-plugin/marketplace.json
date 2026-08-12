@@ -11,7 +11,31 @@
       "source": "./plugins/jueling",
       "description": "觉灵 · Jueling — 以佛法为根基、以《新中国人的精神》为蓝本的觉行陪伴者。适用于人生抉择、内耗、成就后的空虚、恐惧焦虑、创伤丧失、关系困局与意义感缺失。Works in Chinese and English.",
       "category": "wellbeing",
-      "keywords": ["佛法", "觉悟", "陪伴", "新中国人的精神", "Hugo Lan", "mindfulness", "Buddhism"]
+      "keywords": [
+        "佛法",
+        "觉悟",
+        "陪伴",
+        "新中国人的精神",
+        "Hugo Lan",
+        "mindfulness",
+        "Buddhism"
+      ]
+    },
+    {
+      "name": "geo",
+      "source": "./plugins/geo",
+      "description": "GEO 生成式引擎优化 — AI 搜索时代的\"答案权\"争夺：落地六步、跨站 JSON-LD 实体锚、Bing/百度收录实操、伪服务商甄别与承诺边界。来自蓝院长团队已上线案例的实战方法论。",
+      "category": "marketing",
+      "keywords": [
+        "GEO",
+        "生成式引擎优化",
+        "AI搜索",
+        "品牌",
+        "JSON-LD",
+        "实体锚",
+        "Hugo Lan",
+        "generative engine optimization"
+      ]
     }
   ]
 }

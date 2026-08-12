@@ -19,9 +19,15 @@ A companion for the stuck, the anxious, the empty-after-success — moving from 
 ```
 /plugin marketplace add xipai2026-jpg/lan-skills
 /plugin install jueling@lan-skills
+/plugin install geo@lan-skills
 ```
 
-之后重启或 `/reload-plugins`，即可通过 `/jueling:jueling` 或在对话中自然触发使用。
+之后重启或 `/reload-plugins`，即可通过 `/jueling:jueling`、`/geo:geo` 或在对话中自然触发使用。
+
+## 技能 · Skills
+
+- **jueling（觉灵）** — 以佛法为根基、以《新中国人的精神》为蓝本的觉行陪伴者。人生抉择、内耗、成就后的空虚、恐惧焦虑、创伤丧失、关系困局与意义感缺失。中英双语。
+- **geo（生成式引擎优化）** — 让品牌进入豆包/Kimi/DeepSeek 等 AI 引擎答案引用席位的实战方法论：落地六步、跨站 JSON-LD 实体锚、Bing/百度收录实操、伪服务商甄别与承诺边界。
 
 更新：
 
