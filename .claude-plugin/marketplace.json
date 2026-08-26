@@ -36,6 +36,26 @@
         "Hugo Lan",
         "generative engine optimization"
       ]
+    },
+    {
+      "name": "frameshot",
+      "source": "./plugins/frameshot",
+      "description": "分镜帧渲染 — 把旁白文字与配图渲成短视频的一帧帧成品图（标题/字幕/版式/署名齐全），再交给 ffmpeg 拼片。自带 31 个成品版式，覆盖竖屏/横屏/方屏。排版用 HTML/CSS 写，改样式就是改 CSS，不用碰 ffmpeg drawtext。纯标准库，无需 Playwright。",
+      "category": "media",
+      "keywords": [
+        "短视频",
+        "分镜",
+        "字幕",
+        "视频封面",
+        "口播",
+        "HTML渲染",
+        "ffmpeg",
+        "Hugo Lan",
+        "short video",
+        "storyboard",
+        "subtitle",
+        "video frame"
+      ]
     }
   ]
 }

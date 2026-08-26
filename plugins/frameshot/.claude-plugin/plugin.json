@@ -1,0 +1,9 @@
+{
+  "name": "frameshot",
+  "description": "分镜帧渲染 — 用 HTML/CSS 模板 + 无头 Chrome 把旁白与配图渲成短视频分镜帧图，再交给 ffmpeg 拼片。自带 31 个成品版式（竖屏/横屏/方屏），改 CSS 就能改版式，不用碰 ffmpeg drawtext 或 PIL。纯标准库，无需 Playwright。",
+  "author": {
+    "name": "Hugo Lan (蓝晓峰)",
+    "url": "https://lan.x-ip.ai"
+  },
+  "homepage": "https://lan.x-ip.ai"
+}
