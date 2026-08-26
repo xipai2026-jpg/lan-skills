@@ -43,14 +43,28 @@ python3 frameshot.py -t 1080x1920/image_healing.html \
     --title "标题" \
     --text  "这一帧的旁白文字" \
     --image pic.png \
-    --set signature=@你的署名 \
+    --brand @你的署名 \
     -o frames/001.png
 ```
 
 预置参数四个：`title` / `text` / `image` / `index`。
 其余版式自带的参数用 `--set key=value`，可以重复写多个。
 
+**`--brand` 是必须用的**：上游署名分散在 4 个参数上，手动 `--set` 必漏（见坑①）。
+`--tagline "你的副标语"` 覆盖副标，不给就清空。
+
 其他开关：`--transparent` 透明底、`--scale 2` 出 2 倍图、`--wait 3000` 调等待毫秒。
+
+### 透明叠加层（推荐做法）
+`--transparent` 且**不传 `--image`**，出来的是**只有文字与装饰的透明 PNG**（实测 alpha 均值 5/255，
+98% 透明）。把它交给 ffmpeg 叠在背景之上，背景就能做推拉摇移（Ken Burns），
+而不是一张死图——比把背景烤进帧里灵活得多。
+
+```bash
+ffmpeg -loop 1 -t 4 -i bg.png -i overlay.png -filter_complex \
+  "[0:v]scale=1188:2112,zoompan=z='min(zoom+0.0008,1.1)':d=100:s=1080x1920[bg];[bg][1:v]overlay" \
+  -c:v libx264 -pix_fmt yuv420p shot.mp4
+```
 
 ## 批量 + 拼片
 
@@ -95,16 +109,42 @@ wait
 
 ## ⚠️ 三个必须知道的坑
 
-### 🔴 版式里埋着上游的品牌默认值
-22 个版式带自定义参数，其中一部分 `signature` 的默认值是 **`@Pixelle.AI`**（素材来源方的水印）。
-**不显式 `--set signature=…` 就会把别人的署名印进你的成片。**
+### 🔴 上游署名分散在 4 个参数上，只盖一个必漏
+| 参数 | 默认值 | 覆盖版式数 |
+|---|---|---|
+| `author` | `@Pixelle.AI` | **17** |
+| `describe` | `Open Source Omnimodal AI Creative Agent` | **13** |
+| `brand` | `Pixelle-Video` | 13 |
+| `signature` | `@Pixelle.AI` | 5 |
 
-工具已经加了护栏：检测到没覆盖会往 stderr 喊一声。**但它只是警告，照样出图** —— 批量跑时要盯 stderr。
+注意 `describe` 那条**不含 "Pixelle" 字样**，靠关键词搜是搜不出来的。
+**一律用 `--brand 你的署名`**，它把三个署名位一次盖掉并清空副标。
+
+Apache-2.0 **不授予商标权**（§6），所以商用前必须把这些字样清干净——
+这不是版权问题，是商标问题，跟代码可不可以抄是两回事。
+
+护栏会在 stderr 告警，**但只告警不中断，照样出图** —— 批量跑要盯 stderr。
+
+### 🔴 有个版式的背景图是第三方外链
+`static_default.html` 的 `background` 默认值指向阿里 CDN 上一张来路不明的图，
+不覆盖就会把它烤进你的成片。护栏已会对**任何 http(s) 开头的默认值**告警。
+
+（另一个 `image_cartoon.html` 原本硬编码了 jj20.com 的壁纸，本技能已替换为等效 CSS 渐变。）
 
 ### 🔴 别删 `--virtual-time-budget`
 无头 Chrome 没有「等网络空闲」这个概念，`--virtual-time-budget` 是它的等价物。
 去掉或调太小，**会随机出白图 / 缺图，而且不报错、退出码还是 0**。
 批量跑一百帧混进去几张空的，不逐张看根本发现不了。默认 3000ms，慢的机器调大。
+
+### 🔴 15/31 个版式要联网取字体，大陆机房会静默跑版
+用到的 7 个字体（`Noto Sans SC`/`Noto Serif SC`/`Ma Shan Zheng`/`ZCOOL XiaoWei`/
+`ZCOOL KuaiLe`/`Liu Jian Mao Cao`/`Dancing Script`）**全是 SIL OFL 1.1**，可商用、可自托管。
+
+但它们是从 `fonts.googleapis.com` 现拉的：
+- **多花 ~4.3 秒/帧**（不依赖的版式 2.4s，依赖的 6.3~6.8s）
+- **大陆机房该域名被墙** → 静默回退到系统字体，**版式跑掉且不报错**
+
+上生产**必须自托管字体**：下 ttf 到本地，模板里把 `<link>` 换成 `@font-face` 指本地路径。
 
 ### 🔴 配图不存在时照样出图
 Chrome 在 `file:` 源下读不到裸相对路径，工具的 `to_uri()` 负责转成 `file://`。

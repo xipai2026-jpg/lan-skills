@@ -17,7 +17,12 @@
         body {
             width: 1080px;
             height: 1920px;
-            background-image: url('https://lmg.jj20.com/up/allimg/sj02/210122142U11054-0-lp.jpg');
+            /* 改动（frame-lab）：原为 jj20.com 的外链壁纸，版权不明且商用有风险，
+               换成等效的 CSS 渐变。要用自己的底图就在 body 上覆盖 background-image。 */
+            background:
+                radial-gradient(circle at 22% 14%, rgba(255,255,255,.85) 0 6%, transparent 6.5%),
+                radial-gradient(circle at 78% 22%, rgba(255,255,255,.65) 0 4%, transparent 4.5%),
+                linear-gradient(180deg, #8fd3f4 0%, #b8e6f0 42%, #d9f2e6 74%, #f6f7c4 100%);
             background-size: cover;
             background-position: center;
             display: flex;

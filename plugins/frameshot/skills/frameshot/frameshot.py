@@ -38,6 +38,12 @@ CHROME_CANDIDATES = [
 # 与上游一致的占位符语法：{{name}} / {{name=默认}} / {{name:type}} / {{name:type=默认}}
 PARAM_RE = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-z]+))?(?:=([^}]+))?\}\}")
 PRESET = {"title", "text", "image", "index"}
+
+# 上游（Pixelle-Video）埋在模板默认值里的品牌字样。命中即告警。
+# 注意 describe 那条不含 "pixelle"，只匹配 pixelle 会漏掉 13 个模板。
+UPSTREAM_BRAND_WORDS = ("pixelle", "omnimodal ai creative agent")
+# --brand 一次性覆盖的署名类参数（分散在 4 个参数名上）
+BRAND_PARAMS = ("author", "signature", "brand")
 VALID_TYPES = {"text", "number", "color", "bool"}
 
 
@@ -136,15 +142,20 @@ def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1)
 
     html = tpl_file.read_text(encoding="utf-8")
 
-    # 护栏：模板里埋了上游品牌默认值（如 signature=@Pixelle.AI），
-    # 调用方没覆盖就会把别人的水印印进成片 —— 出图前先喊一声。
+    # 护栏：模板里埋了上游品牌默认值和外链素材，
+    # 调用方没覆盖就会把别人的署名/图片烤进成片 —— 出图前先喊一声。
     for k, v in parse_params(html).items():
-        if k in values and values[k] not in (None, ""):
+        # 键存在就算显式覆盖 —— 把 describe 主动置空也是一种覆盖，不该再告警
+        if k in values:
             continue
         d = str(v.get("default", ""))
-        if "pixelle" in d.lower():
-            print("⚠️  参数 %s 用了上游默认水印 %r —— 加 --set %s=你的署名"
+        low = d.lower()
+        if any(w in low for w in UPSTREAM_BRAND_WORDS):
+            print("⚠️  参数 %s 仍是上游品牌默认值 %r —— 用 --brand 或 --set %s=…"
                   % (k, d, k), file=sys.stderr)
+        elif d.startswith(("http://", "https://")):
+            print("⚠️  参数 %s 默认值是外链素材 %s —— 版权不明，"
+                  "商用前务必 --set %s=你自己的图" % (k, d[:60], k), file=sys.stderr)
 
     w, h = parse_template_size(str(tpl_file.relative_to(TPL_DIR))
                                if str(tpl_file).startswith(str(TPL_DIR)) else str(tpl_file))
@@ -191,6 +202,8 @@ def main():
     ap.add_argument("--text", default="", help="这一帧的旁白/字幕")
     ap.add_argument("--image", default="", help="配图（本地路径或 http URL）")
     ap.add_argument("--index", default="", help="帧序号")
+    ap.add_argument("--brand", help="一次性把 author/signature/brand 全设成你的署名")
+    ap.add_argument("--tagline", default=None, help="副标语，覆盖 describe（默认清空）")
     ap.add_argument("--set", action="append", default=[], metavar="K=V", help="额外参数，可重复")
     ap.add_argument("--transparent", action="store_true", help="透明底")
     ap.add_argument("--scale", type=int, default=1, help="设备像素比，2 出 2 倍图")
@@ -233,6 +246,12 @@ def main():
         return
 
     values = {"title": a.title, "text": a.text, "image": a.image, "index": a.index}
+    if a.brand:
+        for k in BRAND_PARAMS:
+            values[k] = a.brand
+        values["describe"] = a.tagline if a.tagline is not None else ""
+    elif a.tagline is not None:
+        values["describe"] = a.tagline
     for kv in a.set:
         if "=" not in kv:
             sys.exit("--set 要写成 key=value：%s" % kv)
