@@ -24,6 +24,19 @@ description: 分镜帧渲染：把旁白文字 + 配图渲成短视频的一帧�
 - Google Chrome 或 Chromium
 - ffmpeg（只有拼片那一步需要）
 
+### 首次使用先下字体（必做）
+
+15/31 个版式要用中文美术字（马善政楷体、站酷快乐体、刘建毛草等）。
+字体共 59MB，**不随技能分发**，第一次用先拉下来：
+
+```bash
+python3 fetch-fonts.py            # 下载缺失的（走 api.github.com）
+python3 fetch-fonts.py --check    # 只看缺哪些
+```
+
+不下也能跑，但那 15 个版式会**静默回退到系统字体、版式跑掉**——工具会在 stderr 告警。
+7 个字体全是 **SIL OFL 1.1**，可商用、可自托管，随包保留 `fonts/OFL-*.txt` 即可。
+
 ## 用法
 
 技能目录下就是工具本体，`cd` 到 `skills/frameshot/` 再跑，或者用绝对路径。
@@ -83,13 +96,35 @@ done < shots.tsv
 ffmpeg -y -framerate 1/4 -i frames/%03d.png -c:v libx264 -pix_fmt yuv420p out.mp4
 ```
 
-约 **8 秒一帧**（其中 2.5~3 秒是等图片和字体加载）。并行 6 路实测稳定，31 帧约 1 分钟：
+### ⚡ 批量用 `--batch`，别用 shell 循环
+
+单帧模式**每帧都要付一次 Chrome 冷启动（实测 2.2 秒）**。批量模式复用同一个
+浏览器实例，这 2.2 秒只付一次：
 
 ```bash
-i=0
-for line in ...; do render_one "$line" & i=$((i+1)); [ $((i%6)) -eq 0 ] && wait; done
-wait
+python3 frameshot.py --batch jobs.jsonl
 ```
+
+`jobs.jsonl` 每行一个任务，字段缺省时回落到命令行参数：
+
+```json
+{"template":"1080x1920/image_healing.html","title":"标题","text":"第一句旁白","image":"1.png","brand":"@你的署名","out":"frames/001.png"}
+{"template":"1080x1920/image_healing.html","title":"标题","text":"第二句旁白","image":"2.png","brand":"@你的署名","out":"frames/002.png"}
+```
+
+实测对比（同一批 10 帧，同一台机器）：
+
+| 方式 | 每帧耗时 |
+|---|---|
+| 单帧模式 + Google Fonts CDN（改造前） | **6.5s** |
+| 单帧模式 + 自托管字体 | **2.9s** |
+| **`--batch` 复用 Chrome** | **0.54s** |
+
+**合计快 12 倍。** 且批量模式产出与单帧模式**逐像素相同**（实测 PSNR = inf），
+不是用画质换速度。
+
+内存也恒定——始终只有一个 tab，不像「把 N 帧堆进一个超高页面截一次再切」
+那样会把 2G 小机器撑爆。
 
 ## 31 个版式
 
@@ -136,15 +171,14 @@ Apache-2.0 **不授予商标权**（§6），所以商用前必须把这些字�
 去掉或调太小，**会随机出白图 / 缺图，而且不报错、退出码还是 0**。
 批量跑一百帧混进去几张空的，不逐张看根本发现不了。默认 3000ms，慢的机器调大。
 
-### 🔴 15/31 个版式要联网取字体，大陆机房会静默跑版
-用到的 7 个字体（`Noto Sans SC`/`Noto Serif SC`/`Ma Shan Zheng`/`ZCOOL XiaoWei`/
-`ZCOOL KuaiLe`/`Liu Jian Mao Cao`/`Dancing Script`）**全是 SIL OFL 1.1**，可商用、可自托管。
+### 🔴 没下字体就渲，会静默跑版
+版式已改成引用本地 `fonts/*.ttf`（原先是从 `fonts.googleapis.com` 现拉，
+每帧多花 ~4.3 秒，且**大陆机房该域名被墙**）。
 
-但它们是从 `fonts.googleapis.com` 现拉的：
-- **多花 ~4.3 秒/帧**（不依赖的版式 2.4s，依赖的 6.3~6.8s）
-- **大陆机房该域名被墙** → 静默回退到系统字体，**版式跑掉且不报错**
+但字体不随包分发。**没跑 `fetch-fonts.py` 就渲，浏览器会静默回退到系统字体**——
+出图成功、退出码 0、版式却不对。工具会在 stderr 告警，但**不中断**。
 
-上生产**必须自托管字体**：下 ttf 到本地，模板里把 `<link>` 换成 `@font-face` 指本地路径。
+批量跑之前先 `python3 fetch-fonts.py --check` 确认一遍。
 
 ### 🔴 配图不存在时照样出图
 Chrome 在 `file:` 源下读不到裸相对路径，工具的 `to_uri()` 负责转成 `file://`。
@@ -156,8 +190,11 @@ Chrome 在 `file:` 源下读不到裸相对路径，工具的 `to_uri()` 负责�
 版式与渲染思路移植自 **[AIDC-AI/Pixelle-Video](https://github.com/AIDC-AI/Pixelle-Video)**（Apache-2.0）
 的 `pixelle_video/services/frame_html.py` 与 `templates/`。
 
-**改动**：Playwright 换成无头 Chrome；去掉 bs4 / loguru 及上游内部依赖，改为纯标准库；
-新增品牌水印护栏。
+**改动**（Apache-2.0 §4(b) 要求标明，各文件内亦有注释）：
+- Playwright → 无头 Chrome；去掉 bs4 / loguru 及上游内部依赖，改为纯标准库
+- 15 个版式的 Google Fonts 外链 → 本地 `@font-face`（`fetch-fonts.py` 按需下载）
+- `image_cartoon.html` 硬编码的 jj20.com 外链壁纸 → 等效 CSS 渐变
+- 新增：品牌署名护栏、`--brand`/`--tagline`、`cdp.py`（复用浏览器的批量模式）
 
 本技能目录下的 `frameshot.py`、`templates/` 依 **Apache License 2.0** 分发，
 许可全文见 `LICENSE-Apache-2.0`，第三方声明见 `NOTICE`。

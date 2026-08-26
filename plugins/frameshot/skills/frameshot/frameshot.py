@@ -118,6 +118,30 @@ def substitute(html, values):
     return PARAM_RE.sub(rep, html)
 
 
+def inject_base(html, tpl_dir):
+    """
+    临时 HTML 落在 /tmp，模板里的相对路径（../../fonts/*.ttf）会指错地方。
+    注入 <base> 让相对路径按模板原位置解析。
+    """
+    base = '<base href="%s/">' % tpl_dir.as_uri().rstrip("/")
+    m = re.search(r"<head[^>]*>", html, re.I)
+    if m:
+        return html[:m.end()] + "\n    " + base + html[m.end():]
+    return base + html
+
+
+def warn_missing_fonts(html, tpl_dir):
+    """模板要的本地字体没下载 → 浏览器会静默回退，版式跑掉还不报错。先喊一声。"""
+    missing = []
+    for src in re.findall(r"url\(['\"]?([^)'\"]+\.ttf)['\"]?\)", html):
+        if not (tpl_dir / src).exists():
+            missing.append(Path(src).name)
+    if missing:
+        print("⚠️  缺字体 %s —— 会静默回退到系统字体、版式跑掉。"
+              "跑 `python3 fetch-fonts.py` 下载" % ", ".join(sorted(set(missing))),
+              file=sys.stderr)
+
+
 def to_uri(image):
     """本地路径转 file:// —— 否则 Chrome 在 file: 源下读不到"""
     if not image:
@@ -133,35 +157,47 @@ def to_uri(image):
     return p.as_uri()
 
 
-def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1):
+def resolve_template(template):
     tpl_file = TPL_DIR / template
     if not tpl_file.exists():
         tpl_file = Path(template)
     if not tpl_file.exists():
-        sys.exit("模板不存在：%s" % template)
+        raise SystemExit("模板不存在：%s" % template)
+    return tpl_file
 
-    html = tpl_file.read_text(encoding="utf-8")
 
-    # 护栏：模板里埋了上游品牌默认值和外链素材，
-    # 调用方没覆盖就会把别人的署名/图片烤进成片 —— 出图前先喊一声。
+def check_upstream_defaults(html, values):
+    """模板里埋了上游品牌默认值或外链素材，调用方没覆盖就会烤进成片。先喊一声。"""
     for k, v in parse_params(html).items():
         # 键存在就算显式覆盖 —— 把 describe 主动置空也是一种覆盖，不该再告警
         if k in values:
             continue
         d = str(v.get("default", ""))
-        low = d.lower()
-        if any(w in low for w in UPSTREAM_BRAND_WORDS):
+        if any(w in d.lower() for w in UPSTREAM_BRAND_WORDS):
             print("⚠️  参数 %s 仍是上游品牌默认值 %r —— 用 --brand 或 --set %s=…"
                   % (k, d, k), file=sys.stderr)
         elif d.startswith(("http://", "https://")):
             print("⚠️  参数 %s 默认值是外链素材 %s —— 版权不明，"
                   "商用前务必 --set %s=你自己的图" % (k, d[:60], k), file=sys.stderr)
 
-    w, h = parse_template_size(str(tpl_file.relative_to(TPL_DIR))
-                               if str(tpl_file).startswith(str(TPL_DIR)) else str(tpl_file))
+
+def prepare(tpl_file, values):
+    """替换占位符、注入 <base>、算出画布尺寸。单帧与批量共用。"""
+    html = tpl_file.read_text(encoding="utf-8")
+    # parse_template_size 按路径分段找 WxH，直接给全路径即可。
+    # （早先用字符串前缀判断是否在 TPL_DIR 内，会被 templates.bak 这类同前缀目录坑到）
+    w, h = parse_template_size(str(tpl_file))
     values = dict(values)
     values["image"] = to_uri(values.get("image", ""))
-    final = substitute(html, values)
+    warn_missing_fonts(html, tpl_file.parent)
+    check_upstream_defaults(html, values)
+    return inject_base(substitute(html, values), tpl_file.parent), w, h
+
+
+def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1):
+    """单帧：起一个 Chrome 出一张图。冷启动约 2.2 秒，批量请用 render_batch。"""
+    tpl_file = resolve_template(template)
+    final, w, h = prepare(tpl_file, values)
 
     out_path = Path(out_path).resolve()
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -194,6 +230,47 @@ def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1)
             os.unlink(tmp)
 
 
+def render_batch(jobs, settle_ms=250, on_done=None):
+    """
+    批量：复用同一个 Chrome 实例。
+
+    单帧模式每帧都要付 ~2.2 秒的 Chrome 冷启动，批量只付一次。
+    内存恒定（始终一个 tab），不会像「把 N 帧堆进一个超高页面」那样撑爆小内存机器。
+
+    jobs: [{template, out, values, transparent?, scale?}, ...]
+    """
+    from cdp import Chrome
+
+    tmp_files = []
+    results = []
+    try:
+        with Chrome(find_chrome()) as chrome:
+            for i, job in enumerate(jobs, 1):
+                tpl_file = resolve_template(job["template"])
+                final, w, h = prepare(tpl_file, job.get("values", {}))
+
+                fd, tmp = tempfile.mkstemp(suffix=".html", prefix="frameshot_")
+                tmp_files.append(tmp)
+                with os.fdopen(fd, "w", encoding="utf-8") as f:
+                    f.write(final)
+
+                png = chrome.shoot(Path(tmp).as_uri(), w, h,
+                                   scale=job.get("scale", 1),
+                                   settle_ms=settle_ms,
+                                   transparent=job.get("transparent", False))
+                out = Path(job["out"]).resolve()
+                out.parent.mkdir(parents=True, exist_ok=True)
+                out.write_bytes(png)
+                results.append(out)
+                if on_done:
+                    on_done(i, len(jobs), out, (w, h))
+    finally:
+        for t in tmp_files:
+            if os.path.exists(t):
+                os.unlink(t)
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser(description="HTML 模板 → 分镜帧图（无头 Chrome）")
     ap.add_argument("-t", "--template", help="模板路径，如 1080x1920/image_default.html")
@@ -208,6 +285,10 @@ def main():
     ap.add_argument("--transparent", action="store_true", help="透明底")
     ap.add_argument("--scale", type=int, default=1, help="设备像素比，2 出 2 倍图")
     ap.add_argument("--wait", type=int, default=3000, help="等待毫秒数")
+    ap.add_argument("--batch", metavar="JOBS.jsonl",
+                    help="批量模式：复用一个 Chrome 跑完整批，每帧省 ~2.2s 冷启动")
+    ap.add_argument("--settle", type=int, default=250,
+                    help="批量模式下 load 事件后的排版落定余量(ms)，默认 250")
     ap.add_argument("--list", action="store_true", help="列出所有模板")
     ap.add_argument("--params", action="store_true", help="列出该模板的参数")
     a = ap.parse_args()
@@ -220,8 +301,45 @@ def main():
             print("%-46s 画布 %dx%d  配图 %dx%d" % (rel, w, h, mw, mh))
         return
 
+    if a.batch:
+        import json, time
+        jobs = []
+        for ln, line in enumerate(Path(a.batch).read_text(encoding="utf-8").splitlines(), 1):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                j = json.loads(line)
+            except ValueError as e:
+                sys.exit("第 %d 行不是合法 JSON：%s" % (ln, e))
+            tpl = j.get("template") or a.template
+            if not tpl:
+                sys.exit("第 %d 行没有 template，命令行也没给 -t" % ln)
+            vals = {"title": j.get("title", a.title), "text": j.get("text", a.text),
+                    "image": j.get("image", a.image), "index": j.get("index", a.index)}
+            brand = j.get("brand", a.brand)
+            if brand:
+                for k in BRAND_PARAMS:
+                    vals[k] = brand
+                vals["describe"] = j.get("tagline", a.tagline) or ""
+            vals.update(j.get("set", {}))
+            jobs.append({"template": tpl, "out": j["out"], "values": vals,
+                         "transparent": j.get("transparent", a.transparent),
+                         "scale": j.get("scale", a.scale)})
+        if not jobs:
+            sys.exit("%s 里没有任务" % a.batch)
+
+        t0 = time.time()
+        def progress(i, n, out, size):
+            print("  [%d/%d] %s (%dx%d)" % (i, n, out.name, size[0], size[1]))
+        render_batch(jobs, settle_ms=a.settle, on_done=progress)
+        dt = time.time() - t0
+        print("✅ %d 帧，共 %.1fs，平均 %.2fs/帧（复用同一个 Chrome）"
+              % (len(jobs), dt, dt / len(jobs)))
+        return
+
     if not a.template:
-        ap.error("要么 --list，要么给 -t 模板")
+        ap.error("要么 --list，要么 --batch，要么给 -t 模板")
 
     tpl = TPL_DIR / a.template
     if not tpl.exists():

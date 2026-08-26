@@ -4,9 +4,14 @@
     <meta charset="UTF-8">
     <meta name="template:media-width" content="1024">
     <meta name="template:media-height" content="1024">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+KuaiLe&display=swap" rel="stylesheet">
+    <style>
+        /* 改动（frame-lab）：原为 fonts.googleapis.com 外链。
+           自托管理由：每帧省 ~4.3 秒，且大陆机房该域名被墙会静默跑版。
+           字体许可 SIL OFL 1.1，见 fonts/OFL-*.txt。
+           字体缺失时浏览器自动回退到 font-family 里的下一个。 */
+        @font-face{font-family:'Ma Shan Zheng';src:url('../../fonts/MaShanZheng-Regular.ttf') format('truetype');font-weight:400;font-display:swap;}
+        @font-face{font-family:'ZCOOL KuaiLe';src:url('../../fonts/ZCOOLKuaiLe-Regular.ttf') format('truetype');font-weight:400;font-display:swap;}
+    </style>
     <style>
         html {
             margin: 0;
