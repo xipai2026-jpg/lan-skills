@@ -36,7 +36,9 @@ CHROME_CANDIDATES = [
 ]
 
 # 与上游一致的占位符语法：{{name}} / {{name=默认}} / {{name:type}} / {{name:type=默认}}
-PARAM_RE = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-z]+))?(?:=([^}]+))?\}\}")
+# 注意 `=([^}]*)` 用的是 * 不是 +：上游写的是 +，导致「空默认值」写法
+# {{foo=}} 整条匹配失败，literal "{{foo=}}" 会原样漏进成片且不报错。
+PARAM_RE = re.compile(r"\{\{([a-zA-Z_][a-zA-Z0-9_]*)(?::([a-z]+))?(?:=([^}]*))?\}\}")
 PRESET = {"title", "text", "image", "index"}
 
 # 上游（Pixelle-Video）埋在模板默认值里的品牌字样。命中即告警。
@@ -191,10 +193,17 @@ def prepare(tpl_file, values):
     values["image"] = to_uri(values.get("image", ""))
     warn_missing_fonts(html, tpl_file.parent)
     check_upstream_defaults(html, values)
-    return inject_base(substitute(html, values), tpl_file.parent), w, h
+    final = substitute(html, values)
+    # 兜底：替换完还剩 {{...}} 就是写法有问题，会原样印进画面
+    leftover = re.findall(r"\{\{[^}]{0,40}\}\}", final)
+    if leftover:
+        print("⚠️  这些占位符没被替换，会原样印进画面：%s"
+              % ", ".join(sorted(set(leftover))[:6]), file=sys.stderr)
+    return inject_base(final, tpl_file.parent), w, h
 
 
-def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1):
+def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1,
+           offline=False, timeout=60):
     """单帧：起一个 Chrome 出一张图。冷启动约 2.2 秒，批量请用 render_batch。"""
     tpl_file = resolve_template(template)
     final, w, h = prepare(tpl_file, values)
@@ -212,15 +221,21 @@ def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1)
             "--disable-dev-shm-usage", "--disable-extensions",
             "--force-device-scale-factor=%d" % scale,
             "--window-size=%d,%d" % (w, h),
-            # 等图片/字体真正加载完 —— 等价于 Playwright 的 networkidle
+            # ⚠️ 它只推进「虚拟时间」（定时器/动画），**不覆盖真实网络等待**。
+            # 实测：模板引一个不可达外链时，budget 给 2000ms 仍耗 35.8 秒。
+            # 所以它能解决「图片解码慢」，解决不了「外链够不着」——那个要 --offline。
             "--virtual-time-budget=%d" % wait_ms,
             "--screenshot=%s" % out_path,
         ]
         if transparent:
             cmd.append("--default-background-color=00000000")
+        if offline:
+            # 让所有外部域名秒失败。样式和字体都在本地时这是纯收益：
+            # 外链只会拖死进程，不会让画面更对。
+            cmd.append("--host-resolver-rules=MAP * ~NOTFOUND")
         cmd.append(Path(tmp).as_uri())
 
-        r = subprocess.run(cmd, capture_output=True, timeout=120)
+        r = subprocess.run(cmd, capture_output=True, timeout=timeout)
         if not out_path.exists() or out_path.stat().st_size == 0:
             sys.stderr.write(r.stderr.decode("utf-8", "ignore")[-2000:] + "\n")
             sys.exit("渲染失败，没有产出图片。")
@@ -230,7 +245,7 @@ def render(template, out_path, values, transparent=False, wait_ms=3000, scale=1)
             os.unlink(tmp)
 
 
-def render_batch(jobs, settle_ms=250, on_done=None):
+def render_batch(jobs, settle_ms=250, on_done=None, offline=False):
     """
     批量：复用同一个 Chrome 实例。
 
@@ -244,7 +259,8 @@ def render_batch(jobs, settle_ms=250, on_done=None):
     tmp_files = []
     results = []
     try:
-        with Chrome(find_chrome()) as chrome:
+        extra = ["--host-resolver-rules=MAP * ~NOTFOUND"] if offline else []
+        with Chrome(find_chrome(), extra_args=extra) as chrome:
             for i, job in enumerate(jobs, 1):
                 tpl_file = resolve_template(job["template"])
                 final, w, h = prepare(tpl_file, job.get("values", {}))
@@ -284,7 +300,10 @@ def main():
     ap.add_argument("--set", action="append", default=[], metavar="K=V", help="额外参数，可重复")
     ap.add_argument("--transparent", action="store_true", help="透明底")
     ap.add_argument("--scale", type=int, default=1, help="设备像素比，2 出 2 倍图")
-    ap.add_argument("--wait", type=int, default=3000, help="等待毫秒数")
+    ap.add_argument("--wait", type=int, default=3000, help="等待毫秒数（只管虚拟时间，不管网络）")
+    ap.add_argument("--offline", action="store_true",
+                    help="断掉所有外部域名。样式字体都在本地时建议常开——外链只会拖死进程")
+    ap.add_argument("--timeout", type=int, default=60, help="单帧硬超时秒数，默认 60")
     ap.add_argument("--batch", metavar="JOBS.jsonl",
                     help="批量模式：复用一个 Chrome 跑完整批，每帧省 ~2.2s 冷启动")
     ap.add_argument("--settle", type=int, default=250,
@@ -332,7 +351,7 @@ def main():
         t0 = time.time()
         def progress(i, n, out, size):
             print("  [%d/%d] %s (%dx%d)" % (i, n, out.name, size[0], size[1]))
-        render_batch(jobs, settle_ms=a.settle, on_done=progress)
+        render_batch(jobs, settle_ms=a.settle, on_done=progress, offline=a.offline)
         dt = time.time() - t0
         print("✅ %d 帧，共 %.1fs，平均 %.2fs/帧（复用同一个 Chrome）"
               % (len(jobs), dt, dt / len(jobs)))
@@ -377,7 +396,8 @@ def main():
         values[k] = v
 
     out, size = render(a.template, a.out, values,
-                       transparent=a.transparent, wait_ms=a.wait, scale=a.scale)
+                       transparent=a.transparent, wait_ms=a.wait, scale=a.scale,
+                       offline=a.offline, timeout=a.timeout)
     print("✅ %s  (%dx%d, %.0f KB)" % (out, size[0] * a.scale, size[1] * a.scale,
                                        out.stat().st_size / 1024))
 
