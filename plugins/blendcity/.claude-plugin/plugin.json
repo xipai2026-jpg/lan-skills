@@ -1,0 +1,9 @@
+{
+  "name": "blendcity",
+  "description": "20 分钟重建一座城 — 给一个经纬度和半径，从 OpenStreetMap 拉真实建筑轮廓与楼高，用无头 Blender 建成 3D 体块城市并渲成图。换城市只改中心点，地面与机位按数据范围自动算。也是无头 Blender 程序化建模（bpy + 批量渲染）的可复用骨架。纯标准库，不装 pip 包。",
+  "author": {
+    "name": "Hugo Lan (蓝晓峰)",
+    "url": "https://lan.x-ip.ai"
+  },
+  "homepage": "https://lan.x-ip.ai"
+}

@@ -56,6 +56,26 @@
         "subtitle",
         "video frame"
       ]
+    },
+    {
+      "name": "blendcity",
+      "source": "./plugins/blendcity",
+      "description": "20 分钟重建一座城 — 给一个经纬度和半径，从 OpenStreetMap 拉真实建筑轮廓与楼高，用无头 Blender 建成 3D 体块城市并渲成图（鸟瞰/街区/俯视三种机位）。换城市只改中心点。也是无头 Blender 程序化建模的可复用骨架。成都天府广场 4229 栋建筑实测通过。",
+      "category": "media",
+      "keywords": [
+        "Blender",
+        "3D建模",
+        "城市建模",
+        "体块模型",
+        "OpenStreetMap",
+        "OSM",
+        "鸟瞰图",
+        "程序化建模",
+        "Hugo Lan",
+        "procedural modeling",
+        "city massing",
+        "bpy"
+      ]
     }
   ]
 }
